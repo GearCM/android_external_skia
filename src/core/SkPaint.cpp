@@ -37,6 +37,71 @@
 
 #define SIZE_OF_PAINT (76)
 
+#if defined(FIMG2D_ENABLED)
+#include <pthread.h>
+
+#define SIZE_OF_PAINT (80)
+
+SkLangEntry::SkLangEntry(){
+    new(&entry) SkLanguage();
+    next = NULL;
+}
+
+static class SkLangPool gLanguages;
+
+SkLangPool::SkLangPool(){
+    LangPool  = NULL;
+    mtx = PTHREAD_MUTEX_INITIALIZER;
+}
+
+SkLangEntry* SkLangPool::setLanguage( const SkLanguage& lang ){
+start:
+    if (!LangPool) {
+        pthread_mutex_lock(&mtx);
+        if (!LangPool){
+            LangPool = new SkLangEntry();
+            LangPool->entry = lang;
+            pthread_mutex_unlock(&mtx);
+            return LangPool;
+        } else {
+            pthread_mutex_unlock(&mtx);
+            goto start;
+        }
+    }
+    SkLangEntry* current = LangPool;
+    SkLangEntry* prev = LangPool;
+    while (current) {
+        if (current->entry == lang){
+            return current;
+        }
+        prev = current;
+        current = current->next;
+    }
+    pthread_mutex_lock(&mtx);
+    current = LangPool;
+    prev = LangPool;
+    while (current) {
+        if (current->entry == lang){
+            pthread_mutex_unlock(&mtx);
+            return current;
+        }
+        prev = current;
+        current = current->next;
+    }
+    current = new SkLangEntry();
+    prev->next = current;
+    current->entry = lang;
+    pthread_mutex_unlock(&mtx);
+
+    return current;
+}
+
+
+const SkLanguage& SkLangPool::getLanguage(SkLangEntry* t) const {
+    return t->entry;
+}
+#endif
+
 // define this to get a printf for out-of-range parameter in setters
 // e.g. setTextSize(-1)
 //#define SK_REPORT_API_RANGE_CHECK
